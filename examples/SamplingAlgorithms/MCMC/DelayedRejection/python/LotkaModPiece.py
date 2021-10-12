@@ -57,10 +57,10 @@ class LotkaEquation(mm.PyModPiece):
         def lotkavolterra(t,y):
             return np.array([self.a*y[0]-self.b*y[0]*y[1],
                             self.d*y[0]*y[1]-self.g*y[1]])
-        sol = iscint.solve_ivp(lotkavolterra,[0,15],[self.x0_1,theta],method="Radau",dense_output=True)
+        sol = iscint.solve_ivp(lotkavolterra,[0,15],[self.x0_1,theta],method="Radau")
         
-        t = np.linspace(0, 15, self.timeSteps)
-        z = sol.sol(t)
+        #t = np.linspace(0, 15, self.timeSteps)
+        z = sol.y
         """
         print(z.T)
         plt.plot( t,z.T)
@@ -104,7 +104,7 @@ class LotkaEquation(mm.PyModPiece):
                 This function returns nothing.  It stores the result in the private
                 ModPiece::gradient variable that is then returned by the `Gradient` function.
 
-        """
+        
         condVals = inputs[0]
         recharge = inputs[1]
 
@@ -130,6 +130,7 @@ class LotkaEquation(mm.PyModPiece):
             grad[1:]   += 0.5*self.dx*gradRhs[1:-1]
 
             self.gradient = grad
+            """
 
 
     # def ApplyHessianImpl(self, outWrt, inWrt1, inWrt2, inputs, sensitivity, vec):
