@@ -15,6 +15,12 @@ endif()
 add_executable(MonteCarlo MonteCarlo.cpp)
 target_link_libraries(MonteCarlo ${MUQ_LIBRARIES} ${MUQ_LINK_LIBRARIES})
 
+add_executable(my_muq_exe MyCode.cpp)
+target_link_libraries(my_muq_exe ${MUQ_LIBRARIES} ${MUQ_LINK_LIBRARIES})
+
+add_executable(my_muq_exe2 MCPred.cpp)
+target_link_libraries(my_muq_exe2 ${MUQ_LIBRARIES} ${MUQ_LINK_LIBRARIES})
+
 add_executable(MultilevelMonteCarlo MultilevelMonteCarlo.cpp)
 target_link_libraries(MultilevelMonteCarlo ${MUQ_LIBRARIES} ${MUQ_LINK_LIBRARIES})
 
