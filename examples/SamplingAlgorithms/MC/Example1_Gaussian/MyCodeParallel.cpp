@@ -5,13 +5,13 @@
 #include "MUQ/Modeling/Distributions/Gaussian.h"
 #include "MUQ/Modeling/Distributions/Density.h"
 
-#include "MUQ/SamplingAlgorithms/DummyKernel.h"
 #include "MUQ/SamplingAlgorithms/MHKernel.h"
 #include "MUQ/SamplingAlgorithms/MHProposal.h"
 #include "MUQ/SamplingAlgorithms/CrankNicolsonProposal.h"
 #include "MUQ/SamplingAlgorithms/SamplingProblem.h"
 #include "MUQ/SamplingAlgorithms/SubsamplingMIProposal.h"
-#include "MUQ/SamplingAlgorithms/ParallelFixedSamplesMIMCMC.h"
+
+#include "MUQ/SamplingAlgorithms/MIComponentFactory.h"
 
 #include <boost/property_tree/ptree.hpp>
 
@@ -20,71 +20,49 @@ using namespace muq::Modeling;
 using namespace muq::SamplingAlgorithms;
 using namespace muq::Utilities;
 
+#include "MUQ/SamplingAlgorithms/ParallelMIMCMCWorker.h"
+#include "MUQ/SamplingAlgorithms/ParallelFixedSamplesMIMCMC.h"
+
 #include "ParallelProblemPredPrey.h"
 
+#include <ctime>
+
 int main(int argc, char **argv){
+  spdlog::set_level(spdlog::level::debug);
 
   MPI_Init(&argc, &argv);
+  auto comm = std::make_shared<parcer::Communicator>(MPI_COMM_WORLD);
+
+  // Name trace according to current time stamp
+  std::time_t result = std::time(nullptr);
+  std::string timestamp = std::asctime(std::localtime(&result));
+  comm->Bcast(timestamp, 0);
+  auto tracer = std::make_shared<OTF2Tracer>("trace", timestamp);
 
   pt::ptree pt;
+  pt.put("NumSamples_0", 10);
+  pt.put("NumSamples_1", 1);
+  pt.put("NumSamples_2", 1e2);
+  pt.put("NumSamples_3", 2e1);
+  pt.put("MCMC.BurnIn", 0);
+  pt.put("MLMCMC.Scheduling", false);
+  pt.put("MLMCMC.Subsampling_0", 10);
+  pt.put("MLMCMC.Subsampling_1", 1);
+  pt.put("MLMCMC.Subsampling_2", 3);
+  pt.put("MLMCMC.Subsampling_3", 0);
 
-  pt.put("NumSamples_0", 1e4);
-  pt.put("NumSamples_1", 5e3);
-  pt.put("NumSamples_2", 1e3);
-  pt.put("NumSamples_3", 5e2);
-  pt.put("MLMCMC.Subsampling", 1);
-  pt.put("MLMCMC.Scheduling",false);
-  pt.put("MCMC.BurnIn", 10); // number of samples for single level
-  pt.put("verbosity", 1); // show some output
-
-/*{
-  std::cout << std::endl << "*************** multilevel" << std::endl << std::endl;
-  auto componentFactory = std::make_shared<MyMIComponentFactory>(pt);
-
-  MIMCMC mimcmc(pt, componentFactory);
-  mimcmc.Run();
-  std::cout << "mean QOI: " << mimcmc.MeanQOI().transpose() << std::endl;
-
-  auto index_zero = std::make_shared<MultiIndex>(1);
-  index_zero->SetValue(0, 0);
-  std::cout << "coarsest level mean QOI: " << mimcmc.GetBox(index_zero)->FinestChain()->GetQOIs()->Mean().transpose() << std::endl;
-}
-
-
-{
-  std::cout << std::endl << "*************** single level reference" << std::endl << std::endl;
-  auto index = componentFactory->FinestIndex();
-
-  auto problem = componentFactory->SamplingProblem(index);
-  auto proposal = componentFactory->Proposal(index, problem);
-
-  std::vector<std::shared_ptr<TransitionKernel>> kernels(1);
-  kernels[0] = std::make_shared<DummyKernel>(pt,problem,proposal);
-
-  Eigen::VectorXd startingPoint = componentFactory->StartingPoint(index);
-
-  auto mcmc = std::make_shared<SingleChainMCMC>(pt,kernels);
-  mcmc->Run(startingPoint);
-  std::cout << "mean QOI: " << mcmc->GetQOIs()->Mean().transpose() << std::endl;
-}*/
-
-{
-  auto comm = std::make_shared<parcer::Communicator>();
 
   auto componentFactory = std::make_shared<MyMIComponentFactory>(pt);
-  StaticLoadBalancingMIMCMC parallelMIMCMC (pt, componentFactory);
+  StaticLoadBalancingMIMCMC parallelMIMCMC (pt, componentFactory, std::make_shared<RoundRobinStaticLoadBalancer>(), comm, tracer);
 
   if (comm->GetRank() == 0) {
     parallelMIMCMC.Run();
     Eigen::VectorXd meanQOI = parallelMIMCMC.MeanQOI();
     std::cout << "mean QOI: " << meanQOI.transpose() << std::endl;
-    parallelMIMCMC.WriteToFile("samples.h5");
   }
+  parallelMIMCMC.WriteToFile("FullParallelGaussianSampling.h5");
   parallelMIMCMC.Finalize();
-
-}
+  tracer->write();
 
   MPI_Finalize();
-
-  return 0;
 }
